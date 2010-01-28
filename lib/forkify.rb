@@ -3,6 +3,10 @@ FORKIFY_DEBUG = false
 require 'pp'
 require 'rinda/tuplespace'
 require 'timeout'
+require 'digest/md5'
+
+FORKIFY_DRB_URI = "drbunix:///tmp/forkify_#{(Time.now.to_i + $$).hash}"
+puts "FORKIFY_DRB_URI: #{FORKIFY_DRB_URI}" if FORKIFY_DEBUG
 
 module Enumerable
 
@@ -76,7 +80,7 @@ module Enumerable
 
         DRb.start_service
 
-        ts = Rinda::TupleSpaceProxy.new(DRbObject.new_with_uri('druby://127.0.0.1:53421'))
+        ts = Rinda::TupleSpaceProxy.new(DRbObject.new_with_uri(FORKIFY_DRB_URI))
 
         conn_attempts = 10
         done_work = false
@@ -138,7 +142,7 @@ module Enumerable
     conn_attempts = 100
     loop do
       begin
-        provider = DRb.start_service('druby://127.0.0.1:53421', pts)
+        provider = DRb.start_service(FORKIFY_DRB_URI, pts)
       rescue Exception => e
         conn_attempts -= 1
         #print "."
@@ -160,10 +164,14 @@ module Enumerable
       puts "grabbing a result..." if FORKIFY_DEBUG
       result_tuples << pts.take([:result, nil, nil])
     end
+    puts "grabbed all results." if FORKIFY_DEBUG
 
+    puts "Stopping Drb service." if FORKIFY_DEBUG
     provider.stop_service
-    # wait for death
+    provider.thread.join
+    ## wait for death
     while provider.alive? do
+      print ":" if FORKIFY_DEBUG
       #print ":"
     end
 
